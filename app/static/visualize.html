@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vector Space Explorer</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #sidebar {
+      width: 280px;
+      flex-shrink: 0;
+      background: #1a1d27;
+      border-right: 1px solid #2e3147;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+
+    h1 { font-size: 1rem; font-weight: 700; letter-spacing: 0.04em; color: #a78bfa; }
+
+    label { font-size: 0.75rem; color: #9ca3af; display: block; margin-bottom: 4px; }
+
+    select, input[type="text"], input[type="number"] {
+      width: 100%;
+      background: #252836;
+      border: 1px solid #3a3f5c;
+      color: #e0e0e0;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 0.85rem;
+    }
+
+    select:focus, input:focus { outline: 2px solid #a78bfa; border-color: transparent; }
+
+    button {
+      width: 100%;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    #btn-load    { background: #7c3aed; color: #fff; }
+    #btn-load:hover { background: #6d28d9; }
+    #btn-neighbors { background: #0ea5e9; color: #fff; }
+    #btn-neighbors:hover { background: #0284c7; }
+    #btn-reset   { background: #374151; color: #d1d5db; }
+    #btn-reset:hover { background: #4b5563; }
+
+    .section { display: flex; flex-direction: column; gap: 8px; }
+    .section-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; border-bottom: 1px solid #2e3147; padding-bottom: 4px; }
+
+    #status { font-size: 0.78rem; color: #9ca3af; min-height: 18px; }
+    #status.error { color: #f87171; }
+
+    #main {
+      flex: 1;
+      position: relative;
+    }
+
+    #plot {
+      width: 100%;
+      height: 100%;
+    }
+
+    #empty-state {
+      display: none;
+      position: absolute;
+      inset: 0;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      color: #6b7280;
+      text-align: center;
+      padding: 40px;
+    }
+
+    #empty-state .icon { font-size: 3rem; }
+    #empty-state p { font-size: 0.95rem; }
+    #empty-state small { font-size: 0.8rem; color: #4b5563; }
+  </style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Vector Space Explorer</h1>
+
+  <div class="section">
+    <div class="section-title">Dataset</div>
+    <div>
+      <label for="max-points">Max points</label>
+      <input type="number" id="max-points" value="5000" min="10" max="50000" />
+    </div>
+    <div>
+      <label for="n-clusters">KMeans clusters</label>
+      <input type="number" id="n-clusters" value="8" min="2" max="50" />
+    </div>
+    <button id="btn-load">Load &amp; Project</button>
+    <div id="status"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Color by</div>
+    <select id="color-by">
+      <option value="__cluster__">Cluster</option>
+    </select>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Nearest neighbors</div>
+    <div>
+      <label for="query-input">Query text</label>
+      <input type="text" id="query-input" placeholder="Type a query…" />
+    </div>
+    <div>
+      <label for="k-input">k neighbors</label>
+      <input type="number" id="k-input" value="5" min="1" max="100" />
+    </div>
+    <button id="btn-neighbors">Find Neighbors</button>
+    <button id="btn-reset">Reset</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="plot"></div>
+  <div id="empty-state">
+    <div class="icon">📭</div>
+    <p>No documents ingested yet.</p>
+    <small>Upload PDFs via <code>POST /upload</code> first, then reload.</small>
+  </div>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let state = {
+    ids: [],
+    docs: [],
+    metas: [],
+    coords: [],          // [[x, y], ...]
+    clusterLabels: [],   // [int, ...] | null
+    metaKeys: [],
+  };
+
+  // ── DOM refs ───────────────────────────────────────────────────────────────
+  const plotEl       = document.getElementById('plot');
+  const emptyEl      = document.getElementById('empty-state');
+  const statusEl     = document.getElementById('status');
+  const colorByEl    = document.getElementById('color-by');
+  const queryEl      = document.getElementById('query-input');
+  const kEl          = document.getElementById('k-input');
+  const maxPtsEl     = document.getElementById('max-points');
+  const nClustersEl  = document.getElementById('n-clusters');
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function setStatus(msg, isError = false) {
+    statusEl.textContent = msg;
+    statusEl.className = isError ? 'error' : '';
+  }
+
+  function truncate(s, n = 200) {
+    return s && s.length > n ? s.slice(0, n) + '…' : (s || '');
+  }
+
+  function metaString(meta) {
+    if (!meta) return '';
+    return Object.entries(meta).map(([k, v]) => `${k}: ${v}`).join('\n');
+  }
+
+  // ── Color mapping ──────────────────────────────────────────────────────────
+  function buildColorArray(colorBy) {
+    if (colorBy === '__cluster__') {
+      return state.clusterLabels || state.coords.map(() => 0);
+    }
+    const vals = state.metas.map(m => m ? String(m[colorBy] ?? '') : '');
+    const unique = [...new Set(vals)];
+    const map = Object.fromEntries(unique.map((v, i) => [v, i]));
+    return vals.map(v => map[v]);
+  }
+
+  function buildHoverText() {
+    return state.ids.map((id, i) => {
+      const doc = truncate(state.docs[i]);
+      const meta = metaString(state.metas[i]);
+      return `<b>${truncate(doc, 80)}</b><br>${meta}`;
+    });
+  }
+
+  // ── Render plot ────────────────────────────────────────────────────────────
+  function renderPlot(highlightIds = []) {
+    const colorBy = colorByEl.value;
+    const colorVals = buildColorArray(colorBy);
+    const hover = buildHoverText();
+
+    const xs = state.coords.map(c => c[0]);
+    const ys = state.coords.map(c => c[1]);
+
+    const highlightSet = new Set(highlightIds);
+    const isHighlight = state.ids.map(id => highlightSet.has(id));
+
+    const markerSizes  = isHighlight.map(h => h ? 14 : 7);
+    const opacities    = highlightIds.length
+      ? isHighlight.map(h => h ? 1.0 : 0.3)
+      : state.ids.map(() => 0.85);
+    const lineWidths   = isHighlight.map(h => h ? 2 : 0);
+    const lineColors   = isHighlight.map(h => h ? 'red' : 'rgba(0,0,0,0)');
+
+    const trace = {
+      type: 'scatter',
+      mode: 'markers',
+      x: xs,
+      y: ys,
+      text: hover,
+      hovertemplate: '%{text}<extra></extra>',
+      marker: {
+        size: markerSizes,
+        color: colorVals,
+        colorscale: 'Viridis',
+        opacity: opacities,
+        line: { width: lineWidths, color: lineColors },
+        showscale: true,
+        colorbar: { thickness: 12, len: 0.5, title: { text: colorBy === '__cluster__' ? 'Cluster' : colorBy, side: 'right' } },
+      },
+    };
+
+    const layout = {
+      paper_bgcolor: '#0f1117',
+      plot_bgcolor: '#0f1117',
+      margin: { t: 20, b: 20, l: 20, r: 20 },
+      xaxis: { showgrid: false, zeroline: false, showticklabels: false },
+      yaxis: { showgrid: false, zeroline: false, showticklabels: false },
+      font: { color: '#e0e0e0' },
+    };
+
+    Plotly.react(plotEl, [trace], layout, { responsive: true, displayModeBar: false });
+  }
+
+  // ── Load & project ─────────────────────────────────────────────────────────
+  async function loadVisualization() {
+    setStatus('Exporting vectors…');
+
+    const maxPts = parseInt(maxPtsEl.value) || 5000;
+    const nClusters = parseInt(nClustersEl.value) || 8;
+
+    let exportData;
+    try {
+      const res = await fetch(`/api/vectors/export?max_points=${maxPts}`);
+      exportData = await res.json();
+    } catch (e) {
+      setStatus('Export failed: ' + e.message, true);
+      return;
+    }
+
+    if (!exportData.ids || exportData.ids.length === 0) {
+      emptyEl.style.display = 'flex';
+      plotEl.style.display = 'none';
+      setStatus('');
+      return;
+    }
+
+    emptyEl.style.display = 'none';
+    plotEl.style.display = 'block';
+
+    state.ids   = exportData.ids;
+    state.docs  = exportData.documents;
+    state.metas = exportData.metadatas;
+
+    // Populate color-by dropdown
+    const metaKeys = new Set();
+    state.metas.forEach(m => m && Object.keys(m).forEach(k => metaKeys.add(k)));
+    state.metaKeys = [...metaKeys];
+
+    colorByEl.innerHTML = '<option value="__cluster__">Cluster</option>';
+    state.metaKeys.forEach(k => {
+      const opt = document.createElement('option');
+      opt.value = k; opt.textContent = k;
+      colorByEl.appendChild(opt);
+    });
+
+    setStatus(`Projecting ${exportData.ids.length} vectors via UMAP…`);
+
+    let projData;
+    try {
+      const res = await fetch('/api/vectors/project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ embeddings: exportData.embeddings, n_clusters: nClusters }),
+      });
+      projData = await res.json();
+    } catch (e) {
+      setStatus('Projection failed: ' + e.message, true);
+      return;
+    }
+
+    state.coords = projData.coords;
+    state.clusterLabels = projData.cluster_labels;
+
+    const sampledNote = exportData.sampled ? ' (sampled)' : '';
+    setStatus(`${state.ids.length} points${sampledNote}`);
+
+    renderPlot();
+  }
+
+  // ── Find neighbors ─────────────────────────────────────────────────────────
+  async function findNeighbors() {
+    const query = queryEl.value.trim();
+    if (!query) { setStatus('Enter a query first', true); return; }
+
+    const k = parseInt(kEl.value) || 5;
+    setStatus('Finding neighbors…');
+
+    let data;
+    try {
+      const res = await fetch('/api/vectors/neighbors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, k }),
+      });
+      data = await res.json();
+    } catch (e) {
+      setStatus('Neighbor search failed: ' + e.message, true);
+      return;
+    }
+
+    setStatus(`Highlighted ${data.k_actual} neighbors`);
+    renderPlot(data.neighbor_ids);
+  }
+
+  // ── Reset ──────────────────────────────────────────────────────────────────
+  function resetHighlight() {
+    queryEl.value = '';
+    setStatus(state.ids.length ? `${state.ids.length} points` : '');
+    if (state.coords.length) renderPlot();
+  }
+
+  // ── Event listeners ────────────────────────────────────────────────────────
+  document.getElementById('btn-load').addEventListener('click', loadVisualization);
+  document.getElementById('btn-neighbors').addEventListener('click', findNeighbors);
+  document.getElementById('btn-reset').addEventListener('click', resetHighlight);
+  colorByEl.addEventListener('change', () => { if (state.coords.length) renderPlot(); });
+
+  // Auto-load on page open
+  loadVisualization();
+</script>
+</body>
+</html>

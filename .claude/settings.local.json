@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(openspec new:*)",
+      "Bash(openspec status:*)",
+      "Bash(openspec instructions:*)",
+      "Bash(pip install:*)",
+      "Bash(python -m venv .venv)",
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(openspec list:*)",
+      "Bash(wait)",
+      "Bash(.venv/bin/python -c \"import langchain, langchain_community, langchain_chroma, sentence_transformers, pypdf, chromadb; print\\(''all imports OK''\\)\")",
+      "Bash(.venv/bin/python -c \":*)",
+      "Bash(.venv/bin/python -c \"\nfrom fpdf import FPDF\n\ndef make_pdf\\(path, prefix, n\\):\n    pdf = FPDF\\(\\)\n    pdf.add_page\\(\\)\n    pdf.set_font\\('Helvetica', size=11\\)\n    pdf.set_margins\\(15, 15, 15\\)\n    for i in range\\(n\\):\n        text = f'{prefix} {i+1}: ' + 'This is sample text for RAG pipeline testing. ' * 6\n        pdf.multi_cell\\(0, 8, text\\)\n        pdf.ln\\(2\\)\n    pdf.output\\(path\\)\n\nmake_pdf\\('/tmp/sample1.pdf', 'Paragraph', 20\\)\nmake_pdf\\('/tmp/sample2.pdf', 'Section', 15\\)\nprint\\('PDFs created'\\)\n\" 2>&1)",
+      "Bash(.venv/bin/python -c \"from app.main import app; print\\('app imported OK'\\)\" 2>&1)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" --max-time 120 -F \"file=@/tmp/sample1.pdf;type=application/pdf;filename=sample1.pdf\" http://127.0.0.1:8000/upload)",
+      "Bash(__NEW_LINE_879874661aad5531__ echo:*)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" --max-time 60 -F \"file=@/tmp/sample2.pdf;type=application/pdf;filename=sample2.pdf\" http://127.0.0.1:8000/upload)",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"uvicorn app.main:app\")",
+      "Bash(python main.py)",
+      "Bash(.venv/bin/python -W all -c \"from langchain_community.embeddings import HuggingFaceEmbeddings\" 2>&1)",
+      "Bash(.venv/bin/python -W all -c \":*)",
+      "Bash(.venv/bin/pip show:*)",
+      "Bash(.venv/bin/python -W error::DeprecationWarning -c \"from langchain_huggingface import HuggingFaceEmbeddings; print\\('OK'\\)\" 2>&1)",
+      "Bash(.venv/bin/python -W error::LangChainDeprecationWarning -c \"\nimport warnings\nwarnings.filterwarnings\\('error', category=DeprecationWarning, message='.*LangChain.*'\\)\nfrom app.services.rag import _get_embeddings\nprint\\('import OK — no LangChainDeprecationWarning'\\)\n\" 2>&1)",
+      "Bash(.venv/bin/python -m pytest tests/test_upload.py -v 2>&1)",
+      "Bash(.venv/bin/pytest tests/test_upload.py -v 2>&1)",
+      "Bash(.venv/bin/python -c \"from app.main import app; from app.services.vectors import export_vectors, project_embeddings, find_neighbors; print\\('imports OK'\\)\")"
+    ]
+  }
+}
