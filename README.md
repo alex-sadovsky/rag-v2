@@ -1,6 +1,6 @@
 # RAG v2
 
-A FastAPI application that ingests PDF documents into a vector store and provides semantic search and interactive embedding visualization.
+A FastAPI application that ingests PDF documents into a vector store, answers questions with **retrieval-augmented generation** (Chroma + Claude Haiku), and provides interactive embedding visualization.
 
 ## Setup
 
@@ -21,6 +21,27 @@ APP_TITLE=My RAG App
 HOST=127.0.0.1
 PORT=8000
 UPLOADS_DIR=uploads
+```
+
+### Anthropic API (RAG query)
+
+The `POST /query` endpoint calls the Anthropic API to generate answers from retrieved chunks. Configure credentials with environment variables (or entries in `.env`):
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | **Yes**, for `/query` | API key from the [Anthropic Console](https://console.anthropic.com/). If unset, `/query` responds with **503** and a message that the key is missing. |
+| `ANTHROPIC_MODEL` | No | Model id for generation. Default: `claude-haiku-4-5`. Override if you need another Claude model. |
+| `QUERY_DENSE_WEAK_BEST_DISTANCE_GT` | No | Dense retrieval “weak” gate: if the best Chroma distance is **above** this value, dense matches are considered weak (lower distance = closer match). Default `1.5` (conservative). Tune with your data. |
+| `QUERY_LEXICAL_MIN_ALPHA_TOKENS` | No | Minimum content-word count (after a small English stopword list) before the lexical warrant can pass via the “enough tokens” rule. Default `5`. |
+| `QUERY_LEXICAL_ENABLE_QUOTES` | No | If `true` (default), double- or single-quoted spans in the question satisfy lexical warrant. |
+| `QUERY_LEXICAL_ENABLE_IDENTIFIERS` | No | If `true` (default), digits, hyphenated tokens, CamelCase, or ALL-CAPS tokens can satisfy lexical warrant. |
+
+Example:
+
+```env
+ANTHROPIC_API_KEY=sk-ant-api03-...
+# Optional:
+# ANTHROPIC_MODEL=claude-haiku-4-5
 ```
 
 ## Running the app
@@ -63,6 +84,60 @@ curl -X POST http://localhost:8000/upload \
 [{"filename": "document.pdf", "chunks": 12}]
 ```
 
+### RAG query (`POST /query`)
+
+Asks a natural-language question using chunks already in the vector store. Retrieval is **dense-first**: every request runs embedding similarity in Chroma (same model as ingestion). **BM25 (lexical) search runs only when** dense hits look weak (best distance above a configurable threshold) **and** a small deterministic **lexical warrant** matches (for example quoted phrases, identifiers, or enough content words). When both gates pass, BM25 candidates are merged **dense-first** (dense order preserved; extra BM25 hits appended without exceeding `k`). Then passages are sent to **Claude Haiku 4.5** with a grounding prompt so the model answers only from the provided context.
+
+**Prerequisites:** Upload at least one PDF via `POST /upload` in the same app session (the store is in-memory). Set `ANTHROPIC_API_KEY` as described above.
+
+```
+POST /query
+Content-Type: application/json
+```
+
+**Request body (JSON)**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `question` | string | — | Required. Non-empty after trimming. User question; embedded and matched against indexed chunks. |
+| `k` | integer | `5` | How many chunks to retrieve (`1`–`20`). |
+
+**Response body (JSON)**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `answer` | string | Model answer grounded on retrieved passages (or a short message if nothing is indexed or no chunks were retrieved). |
+| `sources` | array | Retrieved chunks: each item has `content` (chunk text) and `metadata` (e.g. page info from LangChain). |
+
+**Example**
+
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is the main topic of the document?", "k": 5}'
+```
+
+**Example response**
+
+```json
+{
+  "answer": "According to the provided passages, ...",
+  "sources": [
+    {
+      "content": "First chunk text ...",
+      "metadata": {"page": 1, "source": "document.pdf"}
+    }
+  ]
+}
+```
+
+**Errors**
+
+- **503** — `ANTHROPIC_API_KEY` is not configured.
+- **422** — Invalid body (e.g. empty `question`, or `k` outside `1`–`20`).
+
+OpenAPI details: `/docs` → **RAG query over indexed PDFs**.
+
 ### Export vectors
 
 Returns all stored embeddings, document chunks, and metadata.
@@ -101,6 +176,55 @@ Content-Type: application/json
 {"query": "what is retrieval augmented generation?", "k": 5}
 ```
 
+### Resume analytics (`GET /api/resumes/analytics`)
+
+Returns **aggregates derived from plain text** extracted from PDF files on disk under `UPLOADS_DIR` (default `uploads/`). This endpoint does **not** use embeddings, Chroma, or vector coordinates — only the same PDF text path as ingestion (`PyPDFLoader`).
+
+**Query parameters**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `top_skills` | `15` | Maximum number of skills in the response (`1`–`200`). |
+| `include_other` | `true` | If `false`, the `Other` section category is omitted from the pie chart data. |
+
+**Response (JSON)**
+
+| Field | Description |
+|-------|-------------|
+| `files_scanned` | Number of PDFs successfully read. |
+| `categories` | Pie data: `id`, human `label`, and `count` (characters attributed to each detected resume section). |
+| `skills` | Top skills after lexicon matching; each skill counts **at most once per PDF** (`skill_match_mode`: `per_file_dedupe`), then totals across files. |
+| `warnings` | Optional messages (e.g. unreadable files). |
+| `skill_match_mode` | Always `per_file_dedupe` in this version — documents the counting rule. |
+
+**Example**
+
+```bash
+curl -s "http://localhost:8000/api/resumes/analytics?top_skills=20&include_other=true"
+```
+
+**Example response (abridged)**
+
+```json
+{
+  "files_scanned": 2,
+  "categories": [
+    { "id": "experience", "label": "Experience", "count": 4200 },
+    { "id": "education", "label": "Education", "count": 800 }
+  ],
+  "skills": [
+    { "skill": "Python", "count": 2 },
+    { "skill": "SQL", "count": 1 }
+  ],
+  "warnings": [],
+  "skill_match_mode": "per_file_dedupe"
+}
+```
+
+Editable skill list: `app/data/skills_lexicon.txt` (longer phrases should appear before shorter ones in the file; the service deduplicates and sorts by length when matching).
+
+**Browser:** open `http://localhost:8000/analytics` for Plotly **pie** (section shares) and **horizontal bar** (skills) charts loaded from this API.
+
 ## Vector Space Explorer
 
 An interactive visualization of the embedding space is available at:
@@ -124,3 +248,18 @@ Upload PDFs first, then open the page. It will:
 - **Reset** — clear the highlight and restore original colors
 
 > Requires an internet connection — Plotly is loaded from CDN.
+
+## Resume analytics (PDF text)
+
+Open:
+
+```
+http://localhost:8000/analytics
+```
+
+After uploading PDFs with `POST /upload`, this page fetches `GET /api/resumes/analytics` and shows:
+
+- **Section categories** — heuristic mapping of headings (Experience, Education, Skills, etc.) to character counts in each bucket.
+- **Skills** — substring matches against `app/data/skills_lexicon.txt`, one hit per skill per file, then aggregated.
+
+This view is independent of the embedding / UMAP visualization at `/visualize`.

@@ -23,6 +23,10 @@ def create_app() -> FastAPI:
     async def visualize():
         return FileResponse(_STATIC_DIR / "visualize.html")
 
+    @application.get("/analytics", include_in_schema=False)
+    async def analytics():
+        return FileResponse(_STATIC_DIR / "analytics.html")
+
     return application
 
 

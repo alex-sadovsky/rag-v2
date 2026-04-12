@@ -1,0 +1,132 @@
+amazon web services
+google cloud platform
+natural language processing
+continuous integration
+continuous deployment
+computer vision
+deep learning
+machine learning
+data engineering
+project management
+microsoft azure
+spring boot
+ruby on rails
+express.js
+react native
+postgresql
+elasticsearch
+scikit-learn
+typescript
+javascript
+kubernetes
+tensorflow
+pytorch
+ansible
+jenkins
+snowflake
+bigquery
+redshift
+prometheus
+grafana
+fastapi
+django
+flask
+angular
+vue.js
+next.js
+node.js
+spark
+hadoop
+kafka
+rabbitmq
+terraform
+graphql
+mongodb
+mysql
+sqlite
+redis
+nginx
+apache
+linux
+windows
+android
+swift
+kotlin
+golang
+rust
+scala
+pandas
+numpy
+opencv
+matlab
+bash
+powershell
+html
+css
+sass
+webpack
+jest
+pytest
+selenium
+oauth
+rest
+grpc
+protobuf
+json
+yaml
+sql
+aws
+gcp
+azure
+react
+vue
+node
+rails
+spring
+csharp
+dotnet
+unity
+jupyter
+http
+https
+ssl
+tls
+ldap
+saml
+microservices
+serverless
+lambda
+helm
+git
+svn
+jira
+confluence
+slack
+figma
+sketch
+photoshop
+excel
+tableau
+power bi
+looker
+salesforce
+sap
+oracle
+nosql
+agile
+scrum
+kanban
+docker
+github
+gitlab
+bitbucket
+cicd
+devops
+sre
+perl
+php
+ruby
+java
+python
+c++
+c#
