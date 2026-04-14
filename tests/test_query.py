@@ -62,6 +62,7 @@ def test_query_invokes_llm_with_grounding_context(client):
         mock_settings.query_lexical_min_alpha_tokens = 5
         mock_settings.query_lexical_enable_quotes = True
         mock_settings.query_lexical_enable_identifiers = True
+        mock_settings.rag_include_parent_in_prompt = True
         with patch("app.services.query.get_vectorstore", return_value=mock_store):
             with patch("app.services.query.ChatAnthropic", return_value=mock_llm):
                 r = client.post(
@@ -84,3 +85,98 @@ def test_query_invokes_llm_with_grounding_context(client):
     assert "What about widgets?" in human.content
     system = next(m for m in captured_messages if m.type == "system")
     assert "ONLY" in system.content or "only" in system.content.lower()
+
+
+def test_query_hierarchical_prompt_includes_parent_page_context(client):
+    mock_store = MagicMock()
+    mock_store._collection.count.return_value = 1
+    mock_store.similarity_search_with_score.return_value = [
+        (
+            Document(
+                page_content="Child snippet about widgets.",
+                metadata={
+                    "page": 0,
+                    "parent_page_content": "Full page has widgets and more background.",
+                    "child_index": 0,
+                    "hierarchy": "child",
+                },
+            ),
+            0.31,
+        ),
+    ]
+
+    captured_messages = None
+
+    def fake_invoke(msgs):
+        nonlocal captured_messages
+        captured_messages = msgs
+        return AIMessage(content="Answer.")
+
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = fake_invoke
+
+    with patch("app.routers.query.settings") as mock_settings:
+        mock_settings.anthropic_api_key = "sk-test"
+        mock_settings.anthropic_model = "claude-haiku-4-5"
+        mock_settings.query_dense_weak_best_distance_gt = 1.5
+        mock_settings.query_lexical_min_alpha_tokens = 5
+        mock_settings.query_lexical_enable_quotes = True
+        mock_settings.query_lexical_enable_identifiers = True
+        mock_settings.rag_include_parent_in_prompt = True
+        with patch("app.services.query.get_vectorstore", return_value=mock_store):
+            with patch("app.services.query.ChatAnthropic", return_value=mock_llm):
+                r = client.post("/query", json={"question": "Widgets?", "k": 2})
+
+    assert r.status_code == 200
+    human = next(m for m in captured_messages if m.type == "human")
+    assert "Fine-grained excerpt:" in human.content
+    assert "Full page context:" in human.content
+    assert "Child snippet about widgets." in human.content
+    assert "Full page has widgets" in human.content
+    assert "[Passage 1 — page 1]" in human.content
+
+
+def test_query_parent_context_disabled_uses_child_only(client):
+    mock_store = MagicMock()
+    mock_store._collection.count.return_value = 1
+    mock_store.similarity_search_with_score.return_value = [
+        (
+            Document(
+                page_content="Only child.",
+                metadata={
+                    "page": 0,
+                    "parent_page_content": "Should not appear in prompt.",
+                    "hierarchy": "child",
+                },
+            ),
+            0.2,
+        ),
+    ]
+
+    captured_messages = None
+
+    def fake_invoke(msgs):
+        nonlocal captured_messages
+        captured_messages = msgs
+        return AIMessage(content="Answer.")
+
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = fake_invoke
+
+    with patch("app.routers.query.settings") as mock_settings:
+        mock_settings.anthropic_api_key = "sk-test"
+        mock_settings.anthropic_model = "claude-haiku-4-5"
+        mock_settings.query_dense_weak_best_distance_gt = 1.5
+        mock_settings.query_lexical_min_alpha_tokens = 5
+        mock_settings.query_lexical_enable_quotes = True
+        mock_settings.query_lexical_enable_identifiers = True
+        mock_settings.rag_include_parent_in_prompt = False
+        with patch("app.services.query.get_vectorstore", return_value=mock_store):
+            with patch("app.services.query.ChatAnthropic", return_value=mock_llm):
+                r = client.post("/query", json={"question": "Hi?", "k": 2})
+
+    assert r.status_code == 200
+    human = next(m for m in captured_messages if m.type == "human")
+    assert "Fine-grained excerpt:" not in human.content
+    assert "Should not appear in prompt." not in human.content
+    assert "[Passage 1]\nOnly child." in human.content

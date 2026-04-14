@@ -2,6 +2,11 @@
 
 A FastAPI application that ingests PDF documents into a vector store, answers questions with **retrieval-augmented generation** (Chroma + Claude Haiku), and provides interactive embedding visualization.
 
+The sample dataset link:
+https://www.kaggle.com/datasets/snehaanbhawal/resume-dataset
+
+It has been chosen as resumes is well-known domain, which does not require special knowledge and allows quicker check the RAG quality, create golden dataset.
+
 ## Setup
 
 **Requirements:** Python 3.11+

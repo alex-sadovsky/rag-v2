@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "description": "Golden cases for RAG /query evaluation. Load as JSON. Use reference_answer + judge_criteria for LLM or embedding checks; must_contain / must_not_contain for cheap substring guards (case-insensitive).",
+  "defaults": {
+    "k": 5
+  },
+  "cases": [
+    {
+      "id": "directors-highlights",
+      "question": "are there any directors? what is his highlights?",
+      "k": 5,
+      "reference_answer": "There are directors of IT (or similar). Highlights include VMware (ESXi, vCenter, Horizon), Microsoft server/exchange stack, Hyper-V, Cisco UC, ITIL, vendor and budget management, and leadership responsibilities.",
+      "judge_criteria": "Answer should confirm director-level IT roles exist and summarize concrete skill highlights from the resumes; paraphrasing allowed.",
+      "must_contain": ["VMware", "Director"],
+      "must_not_contain": [],
+      "retrieval": {
+        "hint_keywords": ["Director", "VMware", "Information Technology"]
+      }
+    },
+    {
+      "id": "cisco-routers",
+      "question": "is there anybody with Cisco Routers experience?",
+      "k": 5,
+      "reference_answer": "Yes. At least one candidate lists Cisco Routers (and related Cisco networking) in skills or experience.",
+      "judge_criteria": "Answer should affirm Cisco Routers experience if supported by indexed resumes; may mention related Cisco skills.",
+      "must_contain": ["Cisco"],
+      "must_not_contain": [],
+      "retrieval": {
+        "hint_keywords": ["Cisco Routers", "cisco routers"]
+      }
+    },
+    {
+      "id": "active-directory-cert-typo",
+      "question": "which candidate has Microsoft Active Directory cerfitication?",
+      "k": 5,
+      "reference_answer": "The question misspells 'certification'. A good answer does not substitute unrelated awards (e.g. Team of the Month) for Microsoft Active Directory certification; it either addresses Active Directory-related credentials if present, or states the documents do not clearly show that exact certification.",
+      "judge_criteria": "Do not reward answers that pivot to Team of the Month/DEBTS/eRFA as if they answered Active Directory certification. Reward grounding, spelling awareness, or honest 'not found'.",
+      "must_contain": [],
+      "must_not_contain": ["Team of the Month", "DEBTS", "eRFA"],
+      "retrieval": {
+        "hint_keywords": ["Active Directory", "certification"]
+      }
+    },
+    {
+      "id": "microsoft-certified-professional",
+      "question": "which candidate has Microsoft Certified Professional cerfitication?",
+      "k": 5,
+      "reference_answer": "Multiple candidates list Microsoft Certified Professional (various flavors/years). Answer may note the typo in 'certification' and still identify relevant MCP lines in the documents.",
+      "judge_criteria": "Should identify MCP holders (plural allowed); may cite passages without requiring exact candidate names if names are absent in context.",
+      "must_contain": ["Microsoft Certified Professional"],
+      "must_not_contain": [],
+      "retrieval": {
+        "hint_keywords": ["Microsoft Certified Professional", "MCP"]
+      }
+    },
+    {
+      "id": "lead-it-support-start-last-employer",
+      "question": "when does the Lead Information Technology Support Specialist has started to work at his last employer?",
+      "k": 5,
+      "reference_answer": "Lead IT Support Specialist role at the last employer started March 2016 (03/2016), described as current at resume time.",
+      "judge_criteria": "Must give March 2016 or 03/2016 (or equivalent) for start at last employer; tolerate minor grammar in the question.",
+      "must_contain": ["2016"],
+      "must_not_contain": [],
+      "retrieval": {
+        "hint_keywords": ["Lead", "Information Technology Support Specialist", "2016"]
+      }
+    }
+  ]
+}

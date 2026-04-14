@@ -60,3 +60,22 @@ When BM25 retrieval runs, the application SHALL merge BM25 results with dense re
 #### Scenario: Final context size is bounded
 - **WHEN** hybrid fusion runs
 - **THEN** the number of chunks passed to the model SHALL NOT exceed the documented maximum derived from `k` and configuration
+
+### Requirement: Hierarchical grounding uses parent page context
+
+When retrieved chunks include hierarchical ingestion metadata, the application SHALL incorporate **both** the child chunk text (dense retrieval unit) **and** the associated **parent page text** from metadata into the prompt context passed to the model, using a consistent labeled format (e.g. excerpt plus full page context), unless configuration disables parent inclusion. When such metadata is absent (e.g. legacy chunks), the application SHALL fall back to using only the chunk’s primary text.
+
+#### Scenario: Child with parent metadata expands the prompt
+
+- **WHEN** a retrieved chunk’s metadata includes non-empty `parent_page_content` and parent inclusion is enabled
+- **THEN** the assembled context for that passage includes the child text and the parent page text in the documented structured format
+
+#### Scenario: Legacy chunk without parent metadata
+
+- **WHEN** a retrieved chunk has no `parent_page_content` (or it is empty)
+- **THEN** the assembled context uses only the chunk’s main body text as before, without failing the request
+
+#### Scenario: Parent inclusion can be disabled via configuration
+
+- **WHEN** configuration disables parent page text in prompts
+- **THEN** the assembled context uses only each chunk’s primary body text even if `parent_page_content` is present

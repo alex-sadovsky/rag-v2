@@ -1,0 +1,1 @@
+Golden eval cases live in golden_dataset.txt (JSON: schema_version, cases with id, question, k, reference_answer, judge_criteria, must_contain, must_not_contain, retrieval.hint_keywords).

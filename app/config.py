@@ -24,5 +24,13 @@ class Settings(BaseSettings):
     query_lexical_enable_quotes: bool = True
     query_lexical_enable_identifiers: bool = True
 
+    # Hierarchical chunking: each PDF page is a parent; children are embedded. See `app/services/rag.py`.
+    rag_child_chunk_size: int = Field(default=1000, ge=100, le=32000)
+    rag_child_chunk_overlap: int = Field(default=200, ge=0, le=8000)
+    rag_include_parent_in_prompt: bool = Field(
+        default=True,
+        description="When true, query prompts include each child excerpt plus full parent page text from metadata.",
+    )
+
 
 settings = Settings()
