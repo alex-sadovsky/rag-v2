@@ -14,6 +14,7 @@ build/
 
 # Virtual environments
 .venv/
+.venv-mcp/
 venv/
 env/
 
@@ -26,6 +27,3 @@ env/
 # OS
 .DS_Store
 Thumbs.db
-
-# Dataset
-dataset/

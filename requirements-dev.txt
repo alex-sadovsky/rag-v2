@@ -1,0 +1,2 @@
+-e ./mcp_csv_server_pkg
+-e .[dev]

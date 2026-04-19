@@ -78,6 +78,34 @@ def test_too_many_files_returns_400():
     assert response.status_code == 400
 
 
+@patch("app.routers.upload.MAX_FILE_SIZE", 500)
+@patch("app.routers.upload.ingest_pdf", return_value=3)
+def test_pdf_under_size_limit_succeeds(mock_ingest):
+    content = VALID_PDF_HEADER + b"x" * 100
+    response = client.post(
+        "/upload",
+        files=[("files", pdf_file("small.pdf", content))],
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data[0]["chunks"] == 3
+    assert data[0].get("error") is None
+
+
+@patch("app.routers.upload.MAX_FILE_SIZE", 100)
+def test_pdf_over_size_limit_reported_as_per_file_error():
+    content = VALID_PDF_HEADER + b"x" * 200
+    response = client.post(
+        "/upload",
+        files=[("files", pdf_file("too_big.pdf", content))],
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data[0]["chunks"] is None
+    assert data[0]["error"] is not None
+    assert "50 MB" in data[0]["error"]
+
+
 @patch("app.routers.upload.ingest_pdf", return_value=7)
 def test_duplicate_filename_overwritten(mock_ingest, tmp_path):
     with patch("app.config.settings") as mock_settings:

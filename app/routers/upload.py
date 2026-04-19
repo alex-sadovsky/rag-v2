@@ -8,7 +8,7 @@ from app.services.rag import ingest_pdf
 
 router = APIRouter()
 
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 MAX_FILES = 50
 
 
@@ -39,7 +39,7 @@ async def upload_pdf(files: list[UploadFile] = File(default=[])) -> list[UploadF
             content = await file.read()
 
             if len(content) > MAX_FILE_SIZE:
-                raise ValueError("File exceeds the 5 MB size limit.")
+                raise ValueError("File exceeds the 50 MB size limit.")
 
             destination = uploads_path / filename
             destination.write_bytes(content)

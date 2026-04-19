@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "mcp-csv-pandas": {
+      "command": "python",
+      "args": ["-m", "mcp_csv_server"],
+      "cwd": "Y:/home/alex/develop/ai/architect-course/rag-v2"
+    }
+  }
+}

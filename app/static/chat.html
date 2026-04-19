@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG query</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #2e3147;
+      background: #1a1d27;
+      flex-shrink: 0;
+    }
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #38bdf8;
+    }
+    p.sub {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      margin-top: 6px;
+      max-width: 720px;
+      line-height: 1.45;
+    }
+    p.sub code { color: #a78bfa; }
+    #status {
+      font-size: 0.85rem;
+      color: #9ca3af;
+      padding: 10px 20px;
+      min-height: 22px;
+      flex-shrink: 0;
+    }
+    #status.error { color: #f87171; }
+    #status.loading { color: #a78bfa; }
+    .shell {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding: 0 12px 16px;
+      gap: 10px;
+    }
+    #thread {
+      flex: 1;
+      overflow-y: auto;
+      background: #161922;
+      border: 1px solid #2e3147;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .empty-hint {
+      color: #6b7280;
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 24px 12px;
+    }
+    .turn {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 100%;
+    }
+    .turn.user { align-items: flex-end; }
+    .turn.assistant { align-items: flex-start; }
+    .bubble {
+      max-width: min(100%, 640px);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .turn.user .bubble {
+      background: #252836;
+      border: 1px solid #3a3f5c;
+      color: #e5e7eb;
+    }
+    .turn.assistant .bubble {
+      background: #1a1d27;
+      border: 1px solid #2e3147;
+      color: #e0e0e0;
+    }
+    .meta {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #6b7280;
+      padding: 0 4px;
+    }
+    details.sources {
+      max-width: min(100%, 640px);
+      font-size: 0.78rem;
+      border: 1px solid #2e3147;
+      border-radius: 6px;
+      background: #0f1117;
+      padding: 6px 10px;
+    }
+    details.sources summary {
+      cursor: pointer;
+      color: #9ca3af;
+      user-select: none;
+    }
+    details.sources summary:hover { color: #cbd5e1; }
+    .src-item {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #2e3147;
+    }
+    .src-item:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
+    .src-meta {
+      font-size: 0.7rem;
+      color: #6b7280;
+      margin-bottom: 4px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .src-content {
+      color: #d1d5db;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.8rem;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .composer {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    label.k-label {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    input[type="number"] {
+      width: 56px;
+      background: #252836;
+      border: 1px solid #3a3f5c;
+      color: #e0e0e0;
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 0.85rem;
+    }
+    input[type="number"]:focus { outline: 2px solid #38bdf8; border-color: transparent; }
+    textarea {
+      width: 100%;
+      min-height: 72px;
+      resize: vertical;
+      background: #252836;
+      border: 1px solid #3a3f5c;
+      color: #e0e0e0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+    textarea:focus { outline: 2px solid #38bdf8; border-color: transparent; }
+    button#send {
+      align-self: flex-start;
+      padding: 9px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: #0ea5e9;
+      color: #fff;
+    }
+    button#send:hover:not(:disabled) { background: #0284c7; }
+    button#send:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Query the corpus</h1>
+    <p class="sub">
+      Sends <code>POST /query</code> with your question and optional <code>k</code> (chunks). Answers use indexed PDFs and Claude when configured; natural-disaster questions may use CSV data without an API key.
+    </p>
+  </header>
+  <div id="status">Ready.</div>
+  <div class="shell">
+    <div id="thread" aria-live="polite">
+      <div class="empty-hint" id="hint">Ask a question below. Responses appear here with optional source passages.</div>
+    </div>
+    <div class="composer">
+      <div class="row">
+        <label class="k-label" for="k">Chunks <span title="Retrieval depth (1–20)">k</span>
+          <input type="number" id="k" min="1" max="20" value="5" />
+        </label>
+      </div>
+      <textarea id="question" placeholder="Your question…" aria-label="Question"></textarea>
+      <button type="button" id="send">Send</button>
+    </div>
+  </div>
+  <script>
+    const statusEl = document.getElementById('status');
+    const threadEl = document.getElementById('thread');
+    const hintEl = document.getElementById('hint');
+    const kEl = document.getElementById('k');
+    const qEl = document.getElementById('question');
+    const sendBtn = document.getElementById('send');
+
+    function parseK() {
+      let k = parseInt(kEl.value, 10);
+      if (Number.isNaN(k)) k = 5;
+      k = Math.min(20, Math.max(1, k));
+      kEl.value = String(k);
+      return k;
+    }
+
+    function formatDetail(body) {
+      if (!body || body.detail === undefined || body.detail === null) return null;
+      const d = body.detail;
+      if (typeof d === 'string') return d;
+      if (Array.isArray(d)) {
+        return d.map((x) => (typeof x === 'object' && x.msg ? x.msg : JSON.stringify(x))).join('; ');
+      }
+      return JSON.stringify(d);
+    }
+
+    function hideHint() {
+      if (hintEl) hintEl.remove();
+    }
+
+    function appendUser(text) {
+      hideHint();
+      const turn = document.createElement('div');
+      turn.className = 'turn user';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = 'You';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;
+      turn.appendChild(meta);
+      turn.appendChild(bubble);
+      threadEl.appendChild(turn);
+      threadEl.scrollTop = threadEl.scrollHeight;
+    }
+
+    function appendAssistant(answer, sources) {
+      const turn = document.createElement('div');
+      turn.className = 'turn assistant';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = 'Assistant';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = answer;
+      turn.appendChild(meta);
+      turn.appendChild(bubble);
+
+      if (sources && sources.length) {
+        const det = document.createElement('details');
+        det.className = 'sources';
+        const sum = document.createElement('summary');
+        sum.textContent = 'Sources (' + sources.length + ')';
+        det.appendChild(sum);
+        sources.forEach((s) => {
+          const block = document.createElement('div');
+          block.className = 'src-item';
+          const metaLine = document.createElement('div');
+          metaLine.className = 'src-meta';
+          try {
+            metaLine.textContent = JSON.stringify(s.metadata || {}, null, 0);
+          } catch (e) {
+            metaLine.textContent = String(s.metadata);
+          }
+          const pre = document.createElement('div');
+          pre.className = 'src-content';
+          pre.textContent = s.content != null ? String(s.content) : '';
+          block.appendChild(metaLine);
+          block.appendChild(pre);
+          det.appendChild(block);
+        });
+        turn.appendChild(det);
+      }
+      threadEl.appendChild(turn);
+      threadEl.scrollTop = threadEl.scrollHeight;
+    }
+
+    async function sendQuery() {
+      const raw = qEl.value.trim();
+      if (!raw) {
+        statusEl.className = 'error';
+        statusEl.textContent = 'Enter a question.';
+        return;
+      }
+      const k = parseK();
+      statusEl.className = 'loading';
+      statusEl.textContent = 'Asking…';
+      sendBtn.disabled = true;
+
+      appendUser(raw);
+      qEl.value = '';
+
+      try {
+        const res = await fetch('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: raw, k }),
+        });
+        let body = {};
+        try {
+          body = await res.json();
+        } catch (_) {
+          body = {};
+        }
+        if (!res.ok) {
+          const msg = formatDetail(body) || res.statusText || ('HTTP ' + res.status);
+          statusEl.className = 'error';
+          statusEl.textContent = msg;
+          appendAssistant('(No answer — see status line above.)', []);
+          return;
+        }
+        statusEl.className = '';
+        statusEl.textContent = 'Ready.';
+        appendAssistant(body.answer != null ? String(body.answer) : '', body.sources || []);
+      } catch (e) {
+        statusEl.className = 'error';
+        statusEl.textContent = e && e.message ? e.message : String(e);
+        appendAssistant('(Request failed — see status line above.)', []);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', sendQuery);
+    qEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendQuery();
+      }
+    });
+  </script>
+</body>
+</html>

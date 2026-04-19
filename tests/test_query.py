@@ -8,6 +8,12 @@ from langchain_core.messages import AIMessage
 from app.main import create_app
 
 
+def _disaster_settings(mock_settings) -> None:
+    mock_settings.query_disaster_route_enabled = True
+    mock_settings.query_disaster_default_limit = 50
+    mock_settings.query_disaster_extra_keywords = ""
+
+
 @pytest.fixture
 def client():
     return TestClient(create_app())
@@ -17,6 +23,7 @@ def test_query_missing_api_key_returns_503(client):
     with patch("app.routers.query.settings") as mock_settings:
         mock_settings.anthropic_api_key = None
         mock_settings.anthropic_model = "claude-haiku-4-5"
+        _disaster_settings(mock_settings)
         r = client.post("/query", json={"question": "What is this?"})
     assert r.status_code == 503
     assert "ANTHROPIC_API_KEY" in r.json()["detail"]
@@ -29,6 +36,7 @@ def test_query_empty_store_short_circuits(client):
     with patch("app.routers.query.settings") as mock_settings:
         mock_settings.anthropic_api_key = "sk-test"
         mock_settings.anthropic_model = "claude-haiku-4-5"
+        _disaster_settings(mock_settings)
         with patch("app.services.query.get_vectorstore", return_value=mock_store):
             r = client.post("/query", json={"question": "Hello?"})
     assert r.status_code == 200
@@ -58,6 +66,7 @@ def test_query_invokes_llm_with_grounding_context(client):
     with patch("app.routers.query.settings") as mock_settings:
         mock_settings.anthropic_api_key = "sk-test"
         mock_settings.anthropic_model = "claude-haiku-4-5"
+        _disaster_settings(mock_settings)
         mock_settings.query_dense_weak_best_distance_gt = 1.5
         mock_settings.query_lexical_min_alpha_tokens = 5
         mock_settings.query_lexical_enable_quotes = True
@@ -118,6 +127,7 @@ def test_query_hierarchical_prompt_includes_parent_page_context(client):
     with patch("app.routers.query.settings") as mock_settings:
         mock_settings.anthropic_api_key = "sk-test"
         mock_settings.anthropic_model = "claude-haiku-4-5"
+        _disaster_settings(mock_settings)
         mock_settings.query_dense_weak_best_distance_gt = 1.5
         mock_settings.query_lexical_min_alpha_tokens = 5
         mock_settings.query_lexical_enable_quotes = True
@@ -166,6 +176,7 @@ def test_query_parent_context_disabled_uses_child_only(client):
     with patch("app.routers.query.settings") as mock_settings:
         mock_settings.anthropic_api_key = "sk-test"
         mock_settings.anthropic_model = "claude-haiku-4-5"
+        _disaster_settings(mock_settings)
         mock_settings.query_dense_weak_best_distance_gt = 1.5
         mock_settings.query_lexical_min_alpha_tokens = 5
         mock_settings.query_lexical_enable_quotes = True
@@ -180,3 +191,23 @@ def test_query_parent_context_disabled_uses_child_only(client):
     assert "Fine-grained excerpt:" not in human.content
     assert "Should not appear in prompt." not in human.content
     assert "[Passage 1]\nOnly child." in human.content
+
+
+def test_disaster_query_does_not_require_anthropic_key(client):
+    with patch("app.routers.query.settings") as mock_settings:
+        mock_settings.anthropic_api_key = None
+        mock_settings.anthropic_model = "claude-haiku-4-5"
+        _disaster_settings(mock_settings)
+        with patch(
+            "app.routers.query.run_disaster_query",
+            return_value="Synthetic disaster answer.",
+        ):
+            r = client.post(
+                "/query",
+                json={"question": "EM-DAT floods in 2010"},
+            )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["answer"] == "Synthetic disaster answer."
+    assert len(data["sources"]) == 1
+    assert data["sources"][0]["metadata"].get("tool") == "query_natural_disasters"

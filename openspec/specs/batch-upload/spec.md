@@ -4,7 +4,7 @@
 The `POST /upload` endpoint SHALL accept between 1 and 50 PDF files in a single multipart/form-data request using a repeated `files` field. It SHALL process each file independently and return a list of per-file results.
 
 #### Scenario: Successful batch upload
-- **WHEN** a client sends `POST /upload` with 3 valid PDF files each under 5 MB
+- **WHEN** a client sends `POST /upload` with 3 valid PDF files each under 50 MB
 - **THEN** the server responds with HTTP 200 and a JSON array with one entry per file, each containing `filename` and `chunks`
 
 #### Scenario: Single file still works

@@ -27,6 +27,10 @@ def create_app() -> FastAPI:
     async def analytics():
         return FileResponse(_STATIC_DIR / "analytics.html")
 
+    @application.get("/chat", include_in_schema=False)
+    async def chat():
+        return FileResponse(_STATIC_DIR / "chat.html")
+
     return application
 
 

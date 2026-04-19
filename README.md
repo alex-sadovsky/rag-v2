@@ -14,8 +14,12 @@ It has been chosen as resumes is well-known domain, which does not require speci
 ```bash
 python -m venv .venv
 source .venv/bin/activate       # Windows: .venv\Scripts\activate
-pip install -e .
+pip install -r requirements.txt
 ```
+
+The app imports the **`mcp_csv_server`** package from `mcp_csv_server_pkg/` (same code as the stdio MCP server). Installing via **`requirements.txt`** ensures that local package is installed before the FastAPI app. Alternatively: `pip install -e ./mcp_csv_server_pkg` then `pip install -e .`.
+
+For tests and dev tools, use **`pip install -r requirements-dev.txt`** instead of **`requirements.txt`**.
 
 ### Optional configuration
 
@@ -30,11 +34,13 @@ UPLOADS_DIR=uploads
 
 ### Anthropic API (RAG query)
 
-The `POST /query` endpoint calls the Anthropic API to generate answers from retrieved chunks. Configure credentials with environment variables (or entries in `.env`):
+For most questions, `POST /query` retrieves chunks from the vector store and calls the Anthropic API to generate an answer. If the question clearly targets **global natural-disaster records** (EM-DAT–style data in `dataset/csv/`), the app answers using the **same tabular query logic** as the MCP tool `query_natural_disasters`—**no LLM call** and **no** `ANTHROPIC_API_KEY` required for that branch.
+
+Configure credentials with environment variables (or entries in `.env`):
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | **Yes**, for `/query` | API key from the [Anthropic Console](https://console.anthropic.com/). If unset, `/query` responds with **503** and a message that the key is missing. |
+| `ANTHROPIC_API_KEY` | **Yes**, for RAG `/query` | API key from the [Anthropic Console](https://console.anthropic.com/). If unset, `/query` responds with **503** for normal document questions; natural-disaster CSV queries still work when routed. |
 | `ANTHROPIC_MODEL` | No | Model id for generation. Default: `claude-haiku-4-5`. Override if you need another Claude model. |
 | `QUERY_DENSE_WEAK_BEST_DISTANCE_GT` | No | Dense retrieval “weak” gate: if the best Chroma distance is **above** this value, dense matches are considered weak (lower distance = closer match). Default `1.5` (conservative). Tune with your data. |
 | `QUERY_LEXICAL_MIN_ALPHA_TOKENS` | No | Minimum content-word count (after a small English stopword list) before the lexical warrant can pass via the “enough tokens” rule. Default `5`. |
@@ -77,7 +83,7 @@ POST /upload
 Content-Type: multipart/form-data
 ```
 
-**Limits:** up to 50 files per request, max 5 MB each.
+**Limits:** up to 50 files per request, max 50 MB each.
 
 ```bash
 curl -X POST http://localhost:8000/upload \
@@ -94,6 +100,8 @@ curl -X POST http://localhost:8000/upload \
 Asks a natural-language question using chunks already in the vector store. Retrieval is **dense-first**: every request runs embedding similarity in Chroma (same model as ingestion). **BM25 (lexical) search runs only when** dense hits look weak (best distance above a configurable threshold) **and** a small deterministic **lexical warrant** matches (for example quoted phrases, identifiers, or enough content words). When both gates pass, BM25 candidates are merged **dense-first** (dense order preserved; extra BM25 hits appended without exceeding `k`). Then passages are sent to **Claude Haiku 4.5** with a grounding prompt so the model answers only from the provided context.
 
 **Prerequisites:** Upload at least one PDF via `POST /upload` in the same app session (the store is in-memory). Set `ANTHROPIC_API_KEY` as described above.
+
+**Browser UI:** While the server is running, open **`/chat`** (e.g. `http://127.0.0.1:8000/chat`) for a simple page that calls the same `POST /query` API and shows answers and sources.
 
 ```
 POST /query

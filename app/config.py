@@ -32,5 +32,13 @@ class Settings(BaseSettings):
         description="When true, query prompts include each child excerpt plus full parent page text from metadata.",
     )
 
+    # Natural-disaster CSV branch (same data path as MCP ``query_natural_disasters``).
+    query_disaster_route_enabled: bool = True
+    query_disaster_default_limit: int = Field(default=50, ge=1, le=500)
+    query_disaster_extra_keywords: str = Field(
+        default="",
+        description="Comma-separated extra phrases (case-insensitive) that trigger the disaster CSV path.",
+    )
+
 
 settings = Settings()
